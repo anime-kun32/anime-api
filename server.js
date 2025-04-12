@@ -5,24 +5,43 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import { createApiRoutes } from "../src/routes/apiRoutes.js";
+import { createApiRoutes } from "./src/routes/apiRoutes.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4444;
 const __filename = fileURLToPath(import.meta.url);
-const publicDir = path.join(dirname(dirname(__filename)), "public");
+const publicDir = path.join(dirname(__filename), "public");
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",");
 
+// Express CORS setup
 app.use(
   cors({
-    origin: allowedOrigins || "*",
+    origin: allowedOrigins?.includes("*") ? "*" : allowedOrigins || [],
     methods: ["GET"],
   })
 );
 
-app.use(express.static(publicDir));
+// Custom CORS middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (
+    !allowedOrigins ||
+    allowedOrigins.includes("*") ||
+    (origin && allowedOrigins.includes(origin))
+  ) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return next();
+  }
+  res
+    .status(403)
+    .json({ success: false, message: "Forbidden: Origin not allowed" });
+});
+
+app.use(express.static(publicDir, { redirect: false }));
 
 const jsonResponse = (res, data, status = 200) =>
   res.status(status).json({ success: true, results: data });
