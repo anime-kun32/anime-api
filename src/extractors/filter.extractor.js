@@ -38,9 +38,9 @@ async function extractFilterResults(params = {}) {
     const sortParam = normalizeParam(params.sort, FILTER_SORT);
 
     let languageParam = params.language;
-    if (typeof languageParam === "string") {
-      languageParam = languageParam.trim().toUpperCase();
-      languageParam = FILTER_LANGUAGE_MAP[languageParam] || undefined;
+    if (languageParam != null) {
+      languageParam = String(languageParam).trim().toUpperCase();
+      languageParam = FILTER_LANGUAGE_MAP[languageParam] ?? (Object.values(FILTER_LANGUAGE_MAP).includes(languageParam) ? languageParam : undefined);
     }
 
     let genresParam = params.genres;
@@ -78,17 +78,21 @@ async function extractFilterResults(params = {}) {
 
     const queryParams = new URLSearchParams(filteredParams).toString();
 
-    const resp = await axios.get(
-      `https://${v1_base_url}/filter?${queryParams}`,
-      {
-        headers: {
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-          "Accept-Encoding": "gzip, deflate, br",
-          "User-Agent": DEFAULT_HEADERS,
-        },
-      }
-    );
+    let apiUrl = `https://${v1_base_url}/filter?${queryParams}`;
+
+    if (filteredParams.keyword) {
+      apiUrl = `https://${v1_base_url}/search?${queryParams}`;
+    }
+
+    const resp = await axios.get(apiUrl, {
+      headers: {
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+
+        "Accept-Encoding": "gzip, deflate, br",
+        "User-Agent": DEFAULT_HEADERS,
+      },
+    });
 
     const $ = cheerio.load(resp.data);
     const elements = ".flw-item";
@@ -136,6 +140,7 @@ async function extractFilterResults(params = {}) {
                 .replace(/[^0-9]/g, "")
             ) || null,
         },
+        adultContent: $el.find(".tick-rate").text().trim() || null,
       });
     });
 
@@ -154,7 +159,12 @@ async function extractFilterResults(params = {}) {
         1
     );
 
-    return [parseInt(totalPage, 10), result.length > 0 ? result : []];
+    return [
+      parseInt(totalPage, 10),
+      result.length > 0 ? result : [],
+      parseInt(params.page, 10) || 1,
+      parseInt(params.page, 10) < parseInt(totalPage, 10),
+    ];
   } catch (e) {
     console.error("Error fetching data:", e);
     throw e;
